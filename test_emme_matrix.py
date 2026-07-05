@@ -183,6 +183,68 @@ def test_combine_three_matrices(tmp_path):
     assert df.loc[200, 200] == pytest.approx(5.0)
 
 
+def test_empty_matrix_from_list():
+    mtx = EmmeMatrix.empty([100, 101, 200])
+    df = mtx.to_dataframe()
+    assert df.shape == (3, 3)
+    assert list(df.index) == [100, 101, 200]
+    assert list(df.columns) == [100, 101, 200]
+    assert (df.values == 0).all()
+    # Duplicates removed, ids sorted.
+    assert list(EmmeMatrix.empty([200, 100, 100]).taz_ids) == [100, 200]
+
+
+def test_empty_matrix_custom_fill():
+    mtx = EmmeMatrix.empty([1, 2], fill_value=np.nan)
+    assert np.isnan(mtx.to_dataframe().values).all()
+    # Override the fill at DataFrame time.
+    assert (mtx.to_dataframe(fill_value=0).values == 0).all()
+
+
+def test_empty_then_add(tmp_path):
+    small = _matrix_from(SMALL, tmp_path, "small.txt")
+    template = EmmeMatrix.empty([100, 101, 999])
+    result = (template + small).to_dataframe()
+    # Union of ids includes 999 (only in the template, all zeros).
+    assert list(result.index) == [100, 101, 999]
+    assert result.loc[100, 100] == pytest.approx(1.0)
+    assert result.loc[999, 999] == pytest.approx(0.0)
+
+
+def test_read_taz_ids_txt(tmp_path):
+    path = tmp_path / "tazs.txt"
+    path.write_text("100\n101\n200\n")
+    assert EmmeMatrix.read_taz_ids(path) == [100, 101, 200]
+
+
+def test_read_taz_ids_txt_separators(tmp_path):
+    path = tmp_path / "tazs.txt"
+    path.write_text("100, 101 200\n300,400")
+    assert EmmeMatrix.read_taz_ids(path) == [100, 101, 200, 300, 400]
+
+
+def test_read_taz_ids_csv_column(tmp_path):
+    path = tmp_path / "tazs.csv"
+    path.write_text("name,taz_id,area\nA,100,5\nB,101,6\nC,200,7\n")
+    assert EmmeMatrix.read_taz_ids(path, column="taz_id") == [100, 101, 200]
+    # By 0-based index too.
+    assert EmmeMatrix.read_taz_ids(path, column=1) == [100, 101, 200]
+
+
+def test_read_taz_ids_csv_flat_skips_header(tmp_path):
+    path = tmp_path / "tazs.csv"
+    path.write_text("taz_id\n100\n101\n200\n")
+    assert EmmeMatrix.read_taz_ids(path) == [100, 101, 200]
+
+
+def test_empty_from_file(tmp_path):
+    path = tmp_path / "tazs.txt"
+    path.write_text("100\n101\n200\n")
+    mtx = EmmeMatrix.empty_from_file(path, fill_value=0)
+    assert mtx.to_dataframe().shape == (3, 3)
+    assert list(mtx.taz_ids) == [100, 101, 200]
+
+
 def test_from_dataframe_roundtrip():
     df = pd.DataFrame(
         [[1.0, 2.0], [3.0, 4.0]],

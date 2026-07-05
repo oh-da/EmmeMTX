@@ -90,6 +90,35 @@ grand_total = EmmeMatrix.combine([auto, transit, walk], op="add")
 
 You can also mix in a plain DataFrame or a scalar as the right-hand operand.
 
+### Create an empty matrix from a list of TAZ ids
+
+Build a blank (zero-filled) square matrix — a template to fill in or add to
+other matrices. The ids label both rows and columns.
+
+```python
+from emme_matrix import EmmeMatrix
+
+mtx = EmmeMatrix.empty([100, 101, 200])            # 3 x 3, all zeros
+mtx = EmmeMatrix.empty(taz_ids, fill_value=np.nan)  # or any fill value
+```
+
+Read the ids from a **CSV or txt file**:
+
+```python
+# txt: one id per line, or whitespace/comma separated
+mtx = EmmeMatrix.empty_from_file("tazs.txt")
+
+# csv: pick the id column by name or 0-based index
+mtx = EmmeMatrix.empty_from_file("zones.csv", column="taz_id")
+
+# or read the ids yourself
+ids = EmmeMatrix.read_taz_ids("zones.csv", column="taz_id")
+mtx = EmmeMatrix.empty(ids)
+```
+
+A flat file with a header line works too — non-numeric tokens (like the header)
+are skipped automatically.
+
 Command line:
 
 ```bash

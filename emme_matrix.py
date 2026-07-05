@@ -148,6 +148,104 @@ class EmmeMatrix:
         obj.array = square.to_numpy(dtype=np.float64, na_value=fill_value)
         return obj
 
+    @classmethod
+    def empty(
+        cls,
+        taz_ids: Iterable[int],
+        fill_value: float = 0.0,
+        metadata: Optional[EmmeMatrixMetadata] = None,
+    ) -> "EmmeMatrix":
+        """Create an empty (constant) square matrix from a list of TAZ ids.
+
+        The same ids label both the rows (origins) and the columns
+        (destinations). All cells are set to ``fill_value`` (``0`` by default),
+        giving a blank template you can fill in or combine with other matrices.
+
+        Parameters
+        ----------
+        taz_ids:
+            Iterable of TAZ ids. Duplicates are removed and the ids are sorted.
+        fill_value:
+            Value every cell is initialised to (default ``0.0``).
+        """
+        ids = np.unique(np.asarray(list(taz_ids), dtype=np.int64))
+        obj = cls(filepath=None, fill_value=fill_value)
+        obj.metadata = metadata if metadata is not None else EmmeMatrixMetadata()
+        obj.taz_ids = ids
+        # No reported trips: empty record/index arrays so the array can still be
+        # rebuilt with a different fill value via to_dataframe().
+        obj._records = []
+        obj._row_idx = np.empty(0, dtype=np.int64)
+        obj._col_idx = np.empty(0, dtype=np.int64)
+        obj._trips = np.empty(0, dtype=np.float64)
+        obj.array = obj._build_array(fill_value)
+        return obj
+
+    @classmethod
+    def empty_from_file(
+        cls,
+        filepath: Union[str, Path],
+        fill_value: float = 0.0,
+        column: Union[int, str, None] = None,
+        metadata: Optional[EmmeMatrixMetadata] = None,
+    ) -> "EmmeMatrix":
+        """Create an empty square matrix whose TAZ ids are read from a file.
+
+        The file may be a plain text file (one id per line, or ids separated by
+        whitespace/commas) or a CSV. See :meth:`read_taz_ids` for the ``column``
+        argument.
+        """
+        ids = cls.read_taz_ids(filepath, column=column)
+        return cls.empty(ids, fill_value=fill_value, metadata=metadata)
+
+    @staticmethod
+    def read_taz_ids(
+        filepath: Union[str, Path],
+        column: Union[int, str, None] = None,
+    ) -> List[int]:
+        """Read a list of TAZ ids from a CSV or text file.
+
+        Parameters
+        ----------
+        filepath:
+            Path to a ``.csv`` or ``.txt`` file.
+        column:
+            For a multi-column CSV, the column (name or 0-based index) that
+            holds the TAZ ids. When ``None`` (default) the file is treated as a
+            flat list: every whitespace/comma-separated integer token is used
+            and any non-numeric token (e.g. a header) is skipped.
+
+        Returns
+        -------
+        list of int
+            The ids in the order encountered, with duplicates removed.
+        """
+        path = Path(filepath)
+        if not path.exists():
+            raise FileNotFoundError(f"TAZ id file not found: {path}")
+
+        if column is not None:
+            frame = pd.read_csv(path)
+            col = frame.columns[column] if isinstance(column, int) else column
+            raw_values: Iterable = frame[col].tolist()
+        else:
+            raw_values = re.split(r"[,\s]+", path.read_text().strip())
+
+        ids: List[int] = []
+        seen = set()
+        for value in raw_values:
+            token = str(value).strip()
+            if token == "":
+                continue
+            try:
+                taz = int(float(token)) if "." in token else int(token)
+            except ValueError:
+                continue  # skip headers / non-numeric tokens
+            if taz not in seen:
+                seen.add(taz)
+                ids.append(taz)
+        return ids
+
     # ------------------------------------------------------------------ #
     # Parsing
     # ------------------------------------------------------------------ #
